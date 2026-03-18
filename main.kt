@@ -1,14 +1,17 @@
 /**
- * main.kt — ToricCode Skimming Detector (修正版)
+ * main.kt — ToricCode Skimming Detector (BLE版)
  *
- * 修正点:
- *  1. VirtualSerialPort.buffer の型修正 (MutableList<Byte>)
- *  2. ParityCheck にタイムスタンプ追加 → 時間窓フィルタリング
- *  3. 周期境界条件 (真のトーリックコード)
- *  4. sensorIndex マップ導入 → findSensorById O(1)化
- *  5. analyzeViolation を時間窓ベースに変更
- *  6. Coroutines + Channel によるスレッドセーフな設計
- *  7. parityCheckHistory のメモリ上限管理
+ * SerialPortManager を BleDeviceManager に完全置き換え。
+ * Android の BluetoothLeScanner / BluetoothGatt API を想定した設計。
+ *
+ * 必要な Android パーミッション (AndroidManifest.xml):
+ *   <uses-permission android:name="android.permission.BLUETOOTH_SCAN"
+ *                    android:usesPermissionFlags="neverForLocation" />
+ *   <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
+ *   <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />  ← API 30 以下
+ *
+ * build.gradle:
+ *   implementation "org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3"
  */
 
 import kotlinx.coroutines.*
@@ -19,25 +22,36 @@ import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.CopyOnWriteArrayList
 
 // ─────────────────────────────────────────────────────────────────────────────
+// BLE 関連定数
+// ─────────────────────────────────────────────────────────────────────────────
+
+object BleConstants {
+    // スキミング検出センサー用カスタム GATT UUID（独自定義）
+    val SERVICE_UUID: UUID        = UUID.fromString("0000FFF0-0000-1000-8000-00805F9B34FB")
+    val CHAR_SENSOR_UUID: UUID    = UUID.fromString("0000FFF1-0000-1000-8000-00805F9B34FB")
+    val CHAR_BATTERY_UUID: UUID   = UUID.fromString("0000180F-0000-1000-8000-00805F9B34FB")
+    val DESCRIPTOR_CCC_UUID: UUID = UUID.fromString("00002902-0000-1000-8000-00805F9B34FB")
+
+    const val SCAN_PERIOD_MS        = 10_000L  // スキャン継続時間
+    const val RSSI_THRESHOLD        = -80      // これ以下のデバイスは無視（dBm）
+    const val RECONNECT_DELAY_MS    = 3_000L   // 切断後の再接続待機時間
+    const val MAX_CONNECTED_DEVICES = 16       // 最大同時接続数（4×4グリッド分）
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // データモデル
 // ─────────────────────────────────────────────────────────────────────────────
 
-/** センサーの1回分の読み取りデータ */
 data class SensorReading(
-    val sensorId: String,       // センサー固有ID
-    val timestamp: Long,         // エポックミリ秒
-    val value: Int,              // センサー値（0 or 1 に量子化）
-    val batteryLevel: Int,       // バッテリー残量(%)
-    val rssi: Int                // 受信強度
+    val sensorId: String,
+    val timestamp: Long,
+    val value: Int,          // 0 or 1
+    val batteryLevel: Int,
+    val rssi: Int
 )
 
-/** 格子点の位置（トーラス上） */
-data class GridPosition(
-    val x: Int,
-    val y: Int
-)
+data class GridPosition(val x: Int, val y: Int)
 
-/** 1つのセンサーノードの状態 */
 data class SensorNode(
     val position: GridPosition,
     val sensorId: String,
@@ -46,22 +60,17 @@ data class SensorNode(
     val neighbors: List<GridPosition> = emptyList()
 )
 
-/**
- * プラケット（四角形）のパリティ検査結果
- * ★ Fix #2: timestamp フィールドを追加
- */
 data class ParityCheck(
     val topLeft: GridPosition,
     val topRight: GridPosition,
     val bottomLeft: GridPosition,
     val bottomRight: GridPosition,
-    val expectedParity: Int,     // 期待値（正常時は0）
-    val actualParity: Int,       // 実際のXOR結果
-    val isViolated: Boolean,     // 違反しているか
-    val timestamp: Long = System.currentTimeMillis()  // ★追加
+    val expectedParity: Int = 0,
+    val actualParity: Int,
+    val isViolated: Boolean,
+    val timestamp: Long = System.currentTimeMillis()
 )
 
-/** 異常イベント */
 data class SkimmingEvent(
     val eventId: String,
     val detectedAt: Long,
@@ -72,255 +81,402 @@ data class SkimmingEvent(
 )
 
 enum class SeverityLevel {
-    LOW,       // 単発のパリティ違反
-    MEDIUM,    // 局所的な違反集中
-    HIGH,      // 広範囲な違反
-    CRITICAL;  // システム全体の異常
-
-    operator fun compareTo(other: SeverityLevel): Int =
-        this.ordinal - other.ordinal
+    LOW, MEDIUM, HIGH, CRITICAL;
+    operator fun compareTo(other: SeverityLevel) = ordinal - other.ordinal
 }
 
 enum class EventStatus {
-    DETECTED,
-    INVESTIGATING,
-    CONFIRMED,
-    FALSE_ALARM,
-    RESOLVED
+    DETECTED, INVESTIGATING, CONFIRMED, FALSE_ALARM, RESOLVED
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// 検出エンジン
+// BLE デバイス管理
 // ─────────────────────────────────────────────────────────────────────────────
 
+/** BLE デバイス1台の接続状態 */
+data class BleDeviceInfo(
+    val macAddress: String,         // BLE MAC アドレス（デバイスID）
+    val deviceName: String,
+    val sensorId: String,           // グリッド上のセンサーID にマッピング
+    var connectionState: BleConnectionState = BleConnectionState.DISCONNECTED,
+    var lastRssi: Int = 0,
+    var lastSeenMs: Long = 0L
+)
+
+enum class BleConnectionState {
+    SCANNING,
+    CONNECTING,
+    CONNECTED,
+    SUBSCRIBING,   // Notification 有効化中
+    READY,         // データ受信可能
+    DISCONNECTED,
+    ERROR
+}
+
 /**
- * ToricCodeSkimmingDetector
+ * BleDeviceManager
  *
- * ★ Fix #3: グリッド境界を周期境界条件（トーラス）で扱う
- * ★ Fix #4: sensorIndex で O(1) 検索
- * ★ Fix #6: Coroutines + SharedFlow でスレッドセーフ
+ * Android の BluetoothLeScanner / BluetoothGatt を抽象化したマネージャー。
+ * このファイルはJVMテスト可能なロジック層なので、
+ * Android API 依存部分はインターフェース経由で差し込む設計にしている。
  */
+class BleDeviceManager(
+    private val onReadingReceived: (SensorReading) -> Unit,
+    private val scope: CoroutineScope
+) {
+    private val devices = ConcurrentHashMap<String, BleDeviceInfo>()
+
+    // ─── スキャン ─────────────────────────────────────────────────────────────
+
+    /**
+     * BLE スキャン開始（Android 実装では BluetoothLeScanner.startScan() を呼ぶ）
+     *
+     * Android 実装例:
+     * ```kotlin
+     * val scanner = bluetoothAdapter.bluetoothLeScanner
+     * val filter = ScanFilter.Builder()
+     *     .setServiceUuid(ParcelUuid(BleConstants.SERVICE_UUID))
+     *     .build()
+     * val settings = ScanSettings.Builder()
+     *     .setScanMode(ScanSettings.SCAN_MODE_LOW_LATENCY)
+     *     .build()
+     * scanner.startScan(listOf(filter), settings, scanCallback)
+     * ```
+     */
+    fun startScan() {
+        println("🔍 BLE スキャン開始 (SERVICE_UUID=${BleConstants.SERVICE_UUID})")
+        // Android 実装: BluetoothLeScanner.startScan() をここで呼ぶ
+    }
+
+    fun stopScan() {
+        println("⏹ BLE スキャン停止")
+        // Android 実装: BluetoothLeScanner.stopScan() をここで呼ぶ
+    }
+
+    // ─── デバイス発見コールバック（Android の ScanCallback から呼ばれる） ───────
+
+    /**
+     * Android 実装例 (Activity/Fragment で):
+     * ```kotlin
+     * private val scanCallback = object : ScanCallback() {
+     *     override fun onScanResult(callbackType: Int, result: ScanResult) {
+     *         bleDeviceManager.onDeviceFound(
+     *             macAddress = result.device.address,
+     *             deviceName = result.device.name ?: "Unknown",
+     *             rssi       = result.rssi
+     *         )
+     *     }
+     * }
+     * ```
+     */
+    fun onDeviceFound(macAddress: String, deviceName: String, rssi: Int) {
+        if (rssi < BleConstants.RSSI_THRESHOLD) {
+            println("📡 [$macAddress] RSSI $rssi dBm — 弱すぎるためスキップ")
+            return
+        }
+        if (devices.size >= BleConstants.MAX_CONNECTED_DEVICES) {
+            println("⚠️ 最大接続数 (${BleConstants.MAX_CONNECTED_DEVICES}) に達しています")
+            return
+        }
+        if (!devices.containsKey(macAddress)) {
+            // MAC → sensorId のマッピング（実運用では設定ファイル等から読む）
+            val idx      = devices.size
+            val sensorId = "S_${idx / 4}_${idx % 4}"
+            val info = BleDeviceInfo(
+                macAddress      = macAddress,
+                deviceName      = deviceName,
+                sensorId        = sensorId,
+                connectionState = BleConnectionState.CONNECTING,
+                lastRssi        = rssi,
+                lastSeenMs      = System.currentTimeMillis()
+            )
+            devices[macAddress] = info
+            println("✅ デバイス発見: $deviceName ($macAddress) → $sensorId  RSSI=$rssi")
+            connectToDevice(macAddress)
+        } else {
+            devices[macAddress]?.apply {
+                lastRssi   = rssi
+                lastSeenMs = System.currentTimeMillis()
+            }
+        }
+    }
+
+    // ─── 接続 ─────────────────────────────────────────────────────────────────
+
+    /**
+     * GATT 接続（Android 実装では device.connectGatt() を呼ぶ）
+     *
+     * Android 実装例:
+     * ```kotlin
+     * val gatt = device.connectGatt(context, false, gattCallback, TRANSPORT_LE)
+     * ```
+     */
+    private fun connectToDevice(macAddress: String) {
+        println("🔗 接続中: $macAddress")
+        // Android 実装: BluetoothDevice.connectGatt() をここで呼ぶ
+    }
+
+    /**
+     * Android GATT コールバック実装例:
+     * ```kotlin
+     * private val gattCallback = object : BluetoothGattCallback() {
+     *
+     *     override fun onConnectionStateChange(gatt: BluetoothGatt, status: Int, newState: Int) {
+     *         when (newState) {
+     *             BluetoothProfile.STATE_CONNECTED    -> {
+     *                 bleDeviceManager.onConnected(gatt.device.address)
+     *                 gatt.discoverServices()
+     *             }
+     *             BluetoothProfile.STATE_DISCONNECTED -> {
+     *                 bleDeviceManager.onDisconnected(gatt.device.address)
+     *             }
+     *         }
+     *     }
+     *
+     *     override fun onServicesDiscovered(gatt: BluetoothGatt, status: Int) {
+     *         if (status == BluetoothGatt.GATT_SUCCESS) {
+     *             val char = gatt
+     *                 .getService(BleConstants.SERVICE_UUID)
+     *                 ?.getCharacteristic(BleConstants.CHAR_SENSOR_UUID)
+     *             char?.let {
+     *                 gatt.setCharacteristicNotification(it, true)
+     *                 val descriptor = it.getDescriptor(BleConstants.DESCRIPTOR_CCC_UUID)
+     *                 descriptor.value = BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE
+     *                 gatt.writeDescriptor(descriptor)
+     *                 bleDeviceManager.onSubscribed(gatt.device.address)
+     *             }
+     *         }
+     *     }
+     *
+     *     // Notification で値が来るたびに呼ばれる
+     *     override fun onCharacteristicChanged(
+     *         gatt: BluetoothGatt,
+     *         characteristic: BluetoothGattCharacteristic
+     *     ) {
+     *         if (characteristic.uuid == BleConstants.CHAR_SENSOR_UUID) {
+     *             bleDeviceManager.onRawDataReceived(
+     *                 macAddress = gatt.device.address,
+     *                 raw        = characteristic.value,
+     *                 rssi       = /* 最後に取得した RSSI */ cachedRssi
+     *             )
+     *         }
+     *     }
+     * }
+     * ```
+     */
+    fun onConnected(macAddress: String) {
+        devices[macAddress]?.connectionState = BleConnectionState.CONNECTED
+        println("🟢 接続完了: $macAddress → サービス探索中...")
+        // Android 実装: ここで gatt.discoverServices() → onServicesDiscovered → Notification 登録
+    }
+
+    fun onSubscribed(macAddress: String) {
+        devices[macAddress]?.connectionState = BleConnectionState.READY
+        println("🔔 Notification 登録完了: $macAddress")
+    }
+
+    fun onDisconnected(macAddress: String) {
+        devices[macAddress]?.connectionState = BleConnectionState.DISCONNECTED
+        println("🔴 切断: $macAddress — ${BleConstants.RECONNECT_DELAY_MS}ms後に再接続")
+        scope.launch {
+            delay(BleConstants.RECONNECT_DELAY_MS)
+            connectToDevice(macAddress)
+        }
+    }
+
+    // ─── データ受信 ───────────────────────────────────────────────────────────
+
+    /**
+     * GATT Notification から生バイト列を受け取って SensorReading に変換する。
+     *
+     * バイト列プロトコル（独自定義、4バイト固定長）:
+     *   Byte[0] : センサー値     (0x00 or 0x01)
+     *   Byte[1] : バッテリー残量  (0–100)
+     *   Byte[2] : フラグ         (将来拡張用)
+     *   Byte[3] : チェックサム   (Byte[0] XOR Byte[1] XOR Byte[2])
+     */
+    fun onRawDataReceived(macAddress: String, raw: ByteArray, rssi: Int) {
+        val info = devices[macAddress] ?: return
+
+        if (raw.size < 4) {
+            println("⚠️ [$macAddress] パケット短すぎ: ${raw.size} bytes")
+            return
+        }
+
+        // チェックサム検証
+        val expected = (raw[0].toInt() xor raw[1].toInt() xor raw[2].toInt()) and 0xFF
+        val actual   = raw[3].toInt() and 0xFF
+        if (expected != actual) {
+            println("⚠️ [$macAddress] チェックサム不一致 (expected=$expected actual=$actual)")
+            return
+        }
+
+        val reading = SensorReading(
+            sensorId     = info.sensorId,
+            timestamp    = System.currentTimeMillis(),
+            value        = raw[0].toInt() and 0x01,
+            batteryLevel = raw[1].toInt() and 0xFF,
+            rssi         = rssi
+        )
+
+        info.lastRssi        = rssi
+        info.lastSeenMs      = System.currentTimeMillis()
+        info.connectionState = BleConnectionState.READY
+
+        onReadingReceived(reading)
+    }
+
+    // ─── テスト用ヘルパー ─────────────────────────────────────────────────────
+
+    /** テスト用: 仮想デバイスからのデータ受信をシミュレート */
+    fun simulateReading(macAddress: String, value: Int, battery: Int = 90, rssi: Int = -50) {
+        val checksum = (value xor battery xor 0x00) and 0xFF
+        onRawDataReceived(
+            macAddress = macAddress,
+            raw        = byteArrayOf(value.toByte(), battery.toByte(), 0x00, checksum.toByte()),
+            rssi       = rssi
+        )
+    }
+
+    fun getReadyDevices(): List<BleDeviceInfo> =
+        devices.values.filter { it.connectionState == BleConnectionState.READY }
+
+    fun getAllDevices(): List<BleDeviceInfo> = devices.values.toList()
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 検出エンジン（トーリックコード）
+// ─────────────────────────────────────────────────────────────────────────────
+
 class ToricCodeSkimmingDetector(
     private val gridWidth: Int,
     private val gridHeight: Int,
-    private val detectionWindowMs: Long = 5_000L,   // 時間窓（5秒）
-    private val historyMaxSize: Int = 1_000          // 履歴上限（★ Fix #7）
+    private val detectionWindowMs: Long = 5_000L,
+    private val historyMaxSize: Int = 1_000
 ) {
-    // センサーグリッド本体
     private val sensorGrid: Array<Array<SensorNode?>> =
         Array(gridWidth) { Array(gridHeight) { null } }
 
-    // ★ Fix #4: ID → GridPosition の逆引きインデックス
-    private val sensorIndex = ConcurrentHashMap<String, GridPosition>()
-
-    // スレッドセーフなリスト
+    private val sensorIndex       = ConcurrentHashMap<String, GridPosition>()
     private val parityCheckHistory = CopyOnWriteArrayList<ParityCheck>()
-    private val eventList = CopyOnWriteArrayList<SkimmingEvent>()
+    private val eventList          = CopyOnWriteArrayList<SkimmingEvent>()
 
-    // ★ Fix #6: イベント通知用 SharedFlow
-    private val _eventFlow = MutableSharedFlow<SkimmingEvent>(extraBufferCapacity = 64)
+    private val _eventFlow    = MutableSharedFlow<SkimmingEvent>(extraBufferCapacity = 64)
     val eventFlow: SharedFlow<SkimmingEvent> = _eventFlow.asSharedFlow()
 
-    // ★ Fix #6: 処理用 Channel（バックプレッシャー対応）
-    private val readingChannel = Channel<SensorReading>(capacity = Channel.BUFFERED)
+    private val readingChannel  = Channel<SensorReading>(capacity = Channel.BUFFERED)
     private val processingScope = CoroutineScope(Dispatchers.Default + SupervisorJob())
 
     init {
-        // 非同期でチャンネルを消費するワーカーを起動
         processingScope.launch {
-            for (reading in readingChannel) {
-                processReading(reading)
-            }
+            for (reading in readingChannel) processReading(reading)
         }
     }
-
-    // ─── センサー登録 ──────────────────────────────────────────────────────────
 
     fun registerSensor(sensorId: String, position: GridPosition) {
         val (x, y) = position
-        require(x in 0 until gridWidth && y in 0 until gridHeight) {
-            "Position ($x, $y) is out of grid bounds"
-        }
-        val neighbors = calculateNeighbors(position)
-        sensorGrid[x][y] = SensorNode(
-            position = position,
-            sensorId = sensorId,
-            neighbors = neighbors
-        )
-        // ★ Fix #4
+        require(x in 0 until gridWidth && y in 0 until gridHeight)
+        sensorGrid[x][y] = SensorNode(position, sensorId,
+            neighbors = calculateNeighbors(position))
         sensorIndex[sensorId] = position
     }
 
-    // ★ Fix #3: 周期境界で隣接計算
-    private fun calculateNeighbors(pos: GridPosition): List<GridPosition> {
-        val neighbors = mutableListOf<GridPosition>()
-        for (dx in -1..1) {
-            for (dy in -1..1) {
-                if (dx == 0 && dy == 0) continue
-                neighbors.add(
-                    GridPosition(
-                        x = (pos.x + dx + gridWidth) % gridWidth,
-                        y = (pos.y + dy + gridHeight) % gridHeight
-                    )
-                )
-            }
+    private fun calculateNeighbors(pos: GridPosition) = buildList {
+        for (dx in -1..1) for (dy in -1..1) {
+            if (dx == 0 && dy == 0) continue
+            add(GridPosition((pos.x + dx + gridWidth) % gridWidth,
+                             (pos.y + dy + gridHeight) % gridHeight))
         }
-        return neighbors
     }
 
-    // ─── センサー更新（外部API） ───────────────────────────────────────────────
-
-    /**
-     * センサー読み取り値を更新する。
-     * Channel 経由で非同期処理するのでスレッドセーフ。
-     */
     fun updateSensorReading(reading: SensorReading) {
-        processingScope.launch {
-            readingChannel.send(reading)
-        }
+        processingScope.launch { readingChannel.send(reading) }
     }
 
-    /** Channel から受け取った読み取りを処理（Default スレッドで動作） */
     private fun processReading(reading: SensorReading) {
-        // ★ Fix #4: O(1) 検索
         val pos = sensorIndex[reading.sensorId] ?: return
         sensorGrid[pos.x][pos.y]?.lastReading = reading
         checkSurroundingParity(pos)
     }
 
-    // ─── パリティチェック ──────────────────────────────────────────────────────
-
     private fun checkSurroundingParity(pos: GridPosition) {
-        // このセンサーが右下隅になる全プラケットをチェック
-        for (dx in 0..1) {
-            for (dy in 0..1) {
-                // ★ Fix #3: 周期境界でプラケット起点を計算
-                val ox = (pos.x - dx + gridWidth) % gridWidth
-                val oy = (pos.y - dy + gridHeight) % gridHeight
-                checkParityAt(ox, oy)
-            }
+        for (dx in 0..1) for (dy in 0..1) {
+            checkParityAt(
+                (pos.x - dx + gridWidth)  % gridWidth,
+                (pos.y - dy + gridHeight) % gridHeight
+            )
         }
     }
 
-    /** プラケット (ox, oy) を起点とした 2×2 のパリティチェック */
     private fun checkParityAt(ox: Int, oy: Int) {
-        // ★ Fix #3: 全座標を % で折り返す（真のトーリックコード）
-        val tlPos = GridPosition(ox % gridWidth, oy % gridHeight)
-        val trPos = GridPosition((ox + 1) % gridWidth, oy % gridHeight)
-        val blPos = GridPosition(ox % gridWidth, (oy + 1) % gridHeight)
-        val brPos = GridPosition((ox + 1) % gridWidth, (oy + 1) % gridHeight)
+        val corners = listOf(
+            GridPosition( ox            % gridWidth,  oy            % gridHeight),
+            GridPosition((ox + 1)       % gridWidth,  oy            % gridHeight),
+            GridPosition( ox            % gridWidth, (oy + 1)       % gridHeight),
+            GridPosition((ox + 1)       % gridWidth, (oy + 1)       % gridHeight)
+        )
+        val nodes = corners.map { sensorGrid[it.x][it.y] }
+        if (nodes.any { it == null || !it.isActive || it.lastReading == null }) return
 
-        val tl = sensorGrid[tlPos.x][tlPos.y]
-        val tr = sensorGrid[trPos.x][trPos.y]
-        val bl = sensorGrid[blPos.x][blPos.y]
-        val br = sensorGrid[brPos.x][brPos.y]
-
-        // 全センサーがアクティブかつ最新データを持つ場合のみ
-        val readings = listOf(tl, tr, bl, br)
-        if (readings.any { it == null || !it.isActive || it.lastReading == null }) return
-
-        val xorResult = readings.fold(0) { acc, node ->
-            acc xor node!!.lastReading!!.value
-        }
-
+        val xor   = nodes.fold(0) { acc, n -> acc xor n!!.lastReading!!.value }
         val check = ParityCheck(
-            topLeft     = tlPos,
-            topRight    = trPos,
-            bottomLeft  = blPos,
-            bottomRight = brPos,
-            expectedParity = 0,
-            actualParity   = xorResult,
-            isViolated     = xorResult != 0
-            // timestamp はデフォルト値 System.currentTimeMillis() が入る
+            topLeft = corners[0], topRight    = corners[1],
+            bottomLeft = corners[2], bottomRight = corners[3],
+            actualParity = xor,
+            isViolated   = xor != 0
         )
 
-        // ★ Fix #7: 上限を超えたら古いものを削除
-        if (parityCheckHistory.size >= historyMaxSize) {
-            parityCheckHistory.removeAt(0)
-        }
+        if (parityCheckHistory.size >= historyMaxSize) parityCheckHistory.removeAt(0)
         parityCheckHistory.add(check)
-
-        if (check.isViolated) {
-            analyzeViolation(check)
-        }
+        if (check.isViolated) analyzeViolation(check)
     }
 
-    // ─── 違反解析 ─────────────────────────────────────────────────────────────
-
-    /**
-     * ★ Fix #5: 時間窓ベースのフィルタリング
-     * 直近 detectionWindowMs 以内の違反のみを集計する
-     */
     private fun analyzeViolation(triggerCheck: ParityCheck) {
-        val now = System.currentTimeMillis()
-        val recentViolations = parityCheckHistory.filter {
+        val now    = System.currentTimeMillis()
+        val recent = parityCheckHistory.filter {
             it.isViolated && (now - it.timestamp) < detectionWindowMs
         }
-
-        val violationPositions = recentViolations
+        val positions = recent
             .flatMap { listOf(it.topLeft, it.topRight, it.bottomLeft, it.bottomRight) }
             .distinct()
 
-        val totalSensors = gridWidth * gridHeight
         val severity = when {
-            violationPositions.size > totalSensors / 4 -> SeverityLevel.CRITICAL
-            violationPositions.size > 5                -> SeverityLevel.HIGH
-            violationPositions.size > 2                -> SeverityLevel.MEDIUM
-            else                                       -> SeverityLevel.LOW
+            positions.size > gridWidth * gridHeight / 4 -> SeverityLevel.CRITICAL
+            positions.size > 5 -> SeverityLevel.HIGH
+            positions.size > 2 -> SeverityLevel.MEDIUM
+            else               -> SeverityLevel.LOW
         }
 
         val event = SkimmingEvent(
-            eventId               = "SKIM_${UUID.randomUUID()}",
-            detectedAt            = now,
-            violatedParityChecks  = recentViolations.toList(),
-            affectedSensors       = violationPositions,
-            severity              = severity,
-            status                = EventStatus.DETECTED
+            eventId              = "SKIM_${UUID.randomUUID()}",
+            detectedAt           = now,
+            violatedParityChecks = recent,
+            affectedSensors      = positions,
+            severity             = severity,
+            status               = EventStatus.DETECTED
         )
-
         eventList.add(event)
-
-        if (severity >= SeverityLevel.MEDIUM) {
-            triggerAlert(event)
-        }
-
-        // ★ Fix #6: Flow でサブスクライバーに通知
-        processingScope.launch {
-            _eventFlow.emit(event)
-        }
+        if (severity >= SeverityLevel.MEDIUM) triggerAlert(event)
+        processingScope.launch { _eventFlow.emit(event) }
     }
 
     private fun triggerAlert(event: SkimmingEvent) {
         println("⚠️  [ALERT] スキミング検出!")
-        println("    EventID  : ${event.eventId}")
         println("    Severity : ${event.severity}")
-        println("    Sensors  : ${event.affectedSensors.joinToString()}")
+        println("    Sensors  : ${event.affectedSensors}")
         println("    Checks   : ${event.violatedParityChecks.size} violations in window")
     }
 
-    // ─── 統計 ─────────────────────────────────────────────────────────────────
+    fun getStatistics() = mapOf(
+        "gridSize"              to "${gridWidth}x${gridHeight}",
+        "registeredSensors"     to sensorGrid.flatten().count { it != null },
+        "activeSensors"         to sensorGrid.flatten().count { it?.isActive == true },
+        "parityChecksPerformed" to parityCheckHistory.size,
+        "violationsDetected"    to parityCheckHistory.count { it.isViolated },
+        "eventsGenerated"       to eventList.size,
+        "latestSeverity"        to (eventList.lastOrNull()?.severity ?: SeverityLevel.LOW)
+    )
 
-    fun getStatistics(): Map<String, Any> {
-        val allNodes = sensorGrid.flatten()
-        return mapOf(
-            "gridSize"              to "${gridWidth}x${gridHeight}",
-            "registeredSensors"     to allNodes.count { it != null },
-            "activeSensors"         to allNodes.count { it?.isActive == true },
-            "parityChecksPerformed" to parityCheckHistory.size,
-            "violationsDetected"    to parityCheckHistory.count { it.isViolated },
-            "eventsGenerated"       to eventList.size,
-            "latestSeverity"        to (eventList.lastOrNull()?.severity ?: SeverityLevel.LOW),
-            "latestEventStatus"     to (eventList.lastOrNull()?.status  ?: EventStatus.RESOLVED)
-        )
-    }
-
-    /** センサーをオフライン状態にする */
-    fun deactivateSensor(sensorId: String) {
-        val pos = sensorIndex[sensorId] ?: return
-        sensorGrid[pos.x][pos.y]?.isActive = false
-    }
-
-    /** Coroutines スコープを終了する（アプリ終了時に呼ぶ） */
     fun shutdown() {
         readingChannel.close()
         processingScope.cancel()
@@ -328,163 +484,86 @@ class ToricCodeSkimmingDetector(
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// シリアル通信マネージャー
-// ─────────────────────────────────────────────────────────────────────────────
-
-/**
- * SerialPortManager
- * ★ Fix #1: buffer の型を MutableList<Byte> に修正
- */
-class SerialPortManager {
-    private val activePorts = mutableMapOf<String, VirtualSerialPort>()
-
-    /** 仮想シリアルポートの定義 */
-    data class VirtualSerialPort(
-        val portName: String,
-        val baudRate: Int,
-        val connectedSensorId: String,
-        var isOpen: Boolean = false,
-        val buffer: MutableList<Byte> = mutableListOf()  // ★ Fix #1
-    )
-
-    fun openPort(portName: String, sensorId: String, baudRate: Int = 9600): Boolean {
-        if (activePorts.containsKey(portName)) {
-            println("Port $portName is already open.")
-            return false
-        }
-        activePorts[portName] = VirtualSerialPort(
-            portName          = portName,
-            baudRate          = baudRate,
-            connectedSensorId = sensorId,
-            isOpen            = true
-        )
-        println("✅ Port $portName opened for sensor $sensorId @ ${baudRate}bps")
-        return true
-    }
-
-    fun closePort(portName: String) {
-        activePorts[portName]?.isOpen = false
-        activePorts.remove(portName)
-        println("🔌 Port $portName closed.")
-    }
-
-    /**
-     * ポートからデータを読み込んで SensorReading に変換する（スタブ実装）
-     * 実際は usb-serial-for-android 等でバイト列をパースする
-     */
-    fun readFromPort(portName: String): SensorReading? {
-        val port = activePorts[portName] ?: return null
-        if (!port.isOpen || port.buffer.isEmpty()) return null
-
-        // ダミー実装: buffer の先頭1バイトを value として使用
-        val rawByte = port.buffer.removeAt(0)
-        return SensorReading(
-            sensorId     = port.connectedSensorId,
-            timestamp    = System.currentTimeMillis(),
-            value        = (rawByte.toInt() and 0x01),  // 最下位ビットのみ使用
-            batteryLevel = 100,
-            rssi         = -50
-        )
-    }
-
-    /** テスト用: ポートのバッファに生データを注入する */
-    fun injectRawBytes(portName: String, bytes: List<Byte>) {
-        activePorts[portName]?.buffer?.addAll(bytes)
-    }
-
-    fun listPorts(): List<String> = activePorts.keys.toList()
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
 // エントリーポイント
 // ─────────────────────────────────────────────────────────────────────────────
 
 fun main(): Unit = runBlocking {
-    println("=== ToricCode Skimming Detector 起動 ===\n")
+    println("=== ToricCode Skimming Detector (BLE版) 起動 ===\n")
 
-    // 4×4 グリッド、検出窓 3 秒
     val detector = ToricCodeSkimmingDetector(
-        gridWidth          = 4,
-        gridHeight         = 4,
-        detectionWindowMs  = 3_000L
+        gridWidth         = 4,
+        gridHeight        = 4,
+        detectionWindowMs = 3_000L
     )
 
-    // ─── イベントを非同期で受信して表示 ───────────────────────────────────────
+    // イベント非同期受信
     val eventJob = launch {
         detector.eventFlow.collect { event ->
-            println("\n🔔 [Event Received]")
-            println("   ID       : ${event.eventId}")
-            println("   Severity : ${event.severity}")
-            println("   Affected : ${event.affectedSensors}")
-            println("   Status   : ${event.status}\n")
+            println("\n🔔 [Event] ${event.severity} — ${event.affectedSensors.size} sensors affected\n")
         }
     }
 
-    // ─── センサー登録 (4×4 = 16センサー) ──────────────────────────────────────
-    for (x in 0 until 4) {
-        for (y in 0 until 4) {
-            detector.registerSensor("S_${x}_${y}", GridPosition(x, y))
-        }
+    // センサー登録 (4×4 = 16台)
+    for (x in 0 until 4) for (y in 0 until 4) {
+        detector.registerSensor("S_${x}_${y}", GridPosition(x, y))
     }
     println("✅ 16センサー登録完了\n")
 
-    // ─── 正常系テスト（パリティが揃う） ───────────────────────────────────────
-    println("--- [Test 1] 正常系（パリティ一致）---")
-    val normalValues = mapOf(
-        "S_0_0" to 1, "S_1_0" to 1, "S_0_1" to 1, "S_1_1" to 1  // XOR = 0
+    // BleDeviceManager 初期化
+    val bleManager = BleDeviceManager(
+        onReadingReceived = { reading -> detector.updateSensorReading(reading) },
+        scope             = this
     )
-    for ((id, v) in normalValues) {
-        detector.updateSensorReading(
-            SensorReading(id, System.currentTimeMillis(), v, 90, -40)
-        )
+
+    // ─── BLE スキャン & デバイス発見シミュレーション ──────────────────────────
+    bleManager.startScan()
+    println("--- BLEデバイス発見シミュレーション ---")
+    for (i in 0 until 16) {
+        val mac = "AA:BB:CC:DD:EE:%02X".format(i)
+        bleManager.onDeviceFound(mac, "SkimSensor_$i", rssi = -45 - i)
+        bleManager.onConnected(mac)
+        bleManager.onSubscribed(mac)  // Notification 登録完了
     }
-    delay(200)
+    delay(100)
+
+    // ─── Test 1: 正常系 ────────────────────────────────────────────────────────
+    println("\n--- [Test 1] 正常系（パリティ一致）---")
+    for (i in 0 until 16) {
+        bleManager.simulateReading("AA:BB:CC:DD:EE:%02X".format(i),
+            value = 1, battery = 90, rssi = -50)
+    }
+    delay(300)
     println(detector.getStatistics())
 
-    // ─── 異常系テスト（パリティ違反） ─────────────────────────────────────────
-    println("\n--- [Test 2] 異常系（パリティ違反: スキミング模擬）---")
-    // S_0_0 だけ値が反転 → XOR = 1 → 違反
-    detector.updateSensorReading(
-        SensorReading("S_0_0", System.currentTimeMillis(), 0, 85, -60)
-    )
-    delay(200)
-
-    // 違反を広げる（MEDIUM/HIGH 判定のため）
-    for (id in listOf("S_2_0", "S_2_1", "S_3_1")) {
-        detector.updateSensorReading(
-            SensorReading(id, System.currentTimeMillis(), 1, 80, -55)
-        )
+    // ─── Test 2: 異常系（スキミングデバイスがセンサー値を反転）──────────────────
+    println("\n--- [Test 2] 異常系（スキミングデバイスがBLE信号を改ざん）---")
+    bleManager.simulateReading("AA:BB:CC:DD:EE:00", value = 0, battery = 85, rssi = -75)
+    delay(100)
+    for (mac in listOf("AA:BB:CC:DD:EE:02", "AA:BB:CC:DD:EE:04", "AA:BB:CC:DD:EE:06")) {
+        bleManager.simulateReading(mac, value = 0, battery = 80, rssi = -78)
+        delay(50)
     }
-    delay(200)
-
+    delay(300)
     println(detector.getStatistics())
 
-    // ─── 周期境界テスト（トーリックコード固有） ───────────────────────────────
-    println("\n--- [Test 3] 周期境界（x=3 と x=0 がプラケットを共有）---")
-    detector.updateSensorReading(
-        SensorReading("S_3_3", System.currentTimeMillis(), 1, 75, -70)
-    )
-    detector.updateSensorReading(
-        SensorReading("S_0_3", System.currentTimeMillis(), 0, 75, -70)  // 折り返し先
-    )
-    delay(200)
+    // ─── Test 3: RSSI 閾値フィルタ ─────────────────────────────────────────────
+    println("\n--- [Test 3] RSSI 閾値以下のデバイスは無視 ---")
+    bleManager.onDeviceFound("FF:FF:FF:FF:FF:FF", "WeakDevice", rssi = -95)
 
-    // ─── シリアルポートマネージャーのテスト ───────────────────────────────────
-    println("\n--- [Test 4] SerialPortManager ---")
-    val serialMgr = SerialPortManager()
-    serialMgr.openPort("COM3", "S_0_0", baudRate = 115200)
-    serialMgr.injectRawBytes("COM3", listOf(0x01.toByte(), 0x00.toByte()))
-    val r1 = serialMgr.readFromPort("COM3")
-    val r2 = serialMgr.readFromPort("COM3")
-    println("Read from COM3: $r1")
-    println("Read from COM3: $r2")
-    serialMgr.closePort("COM3")
+    // ─── Test 4: 切断 & 再接続（ログ確認） ─────────────────────────────────────
+    println("\n--- [Test 4] 切断シミュレーション ---")
+    bleManager.onDisconnected("AA:BB:CC:DD:EE:00")
 
-    // ─── 最終統計 ────────────────────────────────────────────────────────────
+    // ─── 接続デバイス一覧 ─────────────────────────────────────────────────────
+    println("\n--- 接続デバイス一覧 ---")
+    bleManager.getAllDevices().sortedBy { it.sensorId }.forEach { d ->
+        println("  ${d.sensorId}  ${d.macAddress}  RSSI=${d.lastRssi}  ${d.connectionState}")
+    }
+
+    // ─── 最終統計 ─────────────────────────────────────────────────────────────
     println("\n=== 最終統計 ===")
     detector.getStatistics().forEach { (k, v) -> println("  $k: $v") }
 
-    // ─── クリーンアップ ───────────────────────────────────────────────────────
     eventJob.cancel()
     detector.shutdown()
     println("\n=== シャットダウン完了 ===")
