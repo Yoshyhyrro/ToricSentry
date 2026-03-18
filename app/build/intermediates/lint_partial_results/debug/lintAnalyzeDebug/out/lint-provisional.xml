@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<incidents format="6" by="lint 8.7.3" type="conditional_incidents">
+
+    <incident
+        id="UnusedAttribute"
+        severity="warning"
+        message="">
+        <fix-data minSdk="ffffffffff800000" requiresApi="ffffffffc0000000"/>
+        <location
+            file="${:app*debug*MAIN*sourceProvider*0*manifest*0}"
+            line="6"
+            column="9"
+            startOffset="201"
+            endLine="6"
+            endColumn="55"
+            endOffset="247"/>
+        <map>
+            <entry
+                name="message"
+                string="Attribute `usesPermissionFlags` is only used in API level 31 and higher (current min is %1$s)"/>
+            <api-levels id="minSdk"
+                value="ffffffffff800000"/>
+            <api-levels id="requiresApi"
+                value="ffffffffc0000000"/>
+        </map>
+    </incident>
+
+    <incident
+        id="ObsoleteSdkInt"
+        severity="warning"
+        message="Unnecessary; SDK_INT is always >= 21">
+        <fix-replace
+            description="Delete tools:targetApi"
+            replacement=""
+            priority="0">
+            <range
+                file="${:app*debug*MAIN*sourceProvider*0*resDir*0}/values/themes.xml"
+                startOffset="228"
+                endOffset="247"/>
+        </fix-replace>
+        <location
+            file="${:app*debug*MAIN*sourceProvider*0*resDir*0}/values/themes.xml"
+            line="4"
+            column="45"
+            startOffset="228"
+            endLine="4"
+            endColumn="64"
+            endOffset="247"/>
+        <map>
+            <condition minGE="fffffffffff00000"/>
+        </map>
+    </incident>
+
+</incidents>
