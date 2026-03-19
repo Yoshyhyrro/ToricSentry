@@ -1,0 +1,9 @@
+R_DEF: Internal format may change without notice
+local
+id logText
+id runDemoButton
+id runQDeformedDemoButton
+id scanRealBleButton
+layout activity_main
+string app_name
+style Theme.ToricSentry

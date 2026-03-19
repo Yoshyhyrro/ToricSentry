@@ -1,0 +1,26 @@
+<lint-module
+    format="1"
+    dir="D:\ToricSentry\app"
+    name=":app"
+    type="APP"
+    maven="ToricSentry:app:unspecified"
+    agpVersion="8.7.3"
+    buildFolder="build"
+    bootClassPath="C:\Users\tyuuw\AppData\Local\Android\Sdk\platforms\android-34\android.jar;C:\Users\tyuuw\AppData\Local\Android\Sdk\build-tools\34.0.0\core-lambda-stubs.jar"
+    javaSourceLevel="17"
+    compileTarget="android-34"
+    neverShrinking="true">
+  <lintOptions
+      disable="CoarseFineLocation"
+      abortOnError="true"
+      absolutePaths="true"
+      checkReleaseBuilds="true"
+      explainIssues="true">
+    <severities>
+      <severity
+        id="CoarseFineLocation"
+        severity="IGNORE" />
+    </severities>
+  </lintOptions>
+  <variant name="debug"/>
+</lint-module>

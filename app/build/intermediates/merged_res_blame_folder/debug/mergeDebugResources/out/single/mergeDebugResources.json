@@ -1,0 +1,10 @@
+[
+    {
+        "merged": "C:\\Gradle\\.gradle\\daemon\\8.10.2\\com.yoshyhyrro.toricsentry.app-debug-33:\\layout_activity_main.xml.flat",
+        "source": "C:\\Gradle\\.gradle\\daemon\\8.10.2\\com.yoshyhyrro.toricsentry.app-main-35:\\layout\\activity_main.xml"
+    },
+    {
+        "merged": "com.yoshyhyrro.toricsentry.app-debug-33:/layout_activity_main.xml.flat",
+        "source": "com.yoshyhyrro.toricsentry.app-main-35:/layout/activity_main.xml"
+    }
+]
