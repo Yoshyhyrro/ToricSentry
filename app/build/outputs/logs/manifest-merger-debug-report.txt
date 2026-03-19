@@ -1,9 +1,9 @@
 -- Merging decision tree log ---
 manifest
-ADDED from D:\ToricSentry\app\src\main\AndroidManifest.xml:2:1-29:12
-INJECTED from D:\ToricSentry\app\src\main\AndroidManifest.xml:2:1-29:12
-INJECTED from D:\ToricSentry\app\src\main\AndroidManifest.xml:2:1-29:12
-INJECTED from D:\ToricSentry\app\src\main\AndroidManifest.xml:2:1-29:12
+ADDED from D:\ToricSentry\app\src\main\AndroidManifest.xml:2:1-26:12
+INJECTED from D:\ToricSentry\app\src\main\AndroidManifest.xml:2:1-26:12
+INJECTED from D:\ToricSentry\app\src\main\AndroidManifest.xml:2:1-26:12
+INJECTED from D:\ToricSentry\app\src\main\AndroidManifest.xml:2:1-26:12
 MERGED from [com.google.android.material:material:1.12.0] C:\Gradle\.gradle\caches\8.10.2\transforms\b3ce203889be37e725c4cc61b2df2736\transformed\material-1.12.0\AndroidManifest.xml:17:1-24:12
 MERGED from [androidx.constraintlayout:constraintlayout:2.1.4] C:\Gradle\.gradle\caches\8.10.2\transforms\3acf2ec4c13d6f0af61c3fbcf11db669\transformed\constraintlayout-2.1.4\AndroidManifest.xml:2:1-11:12
 MERGED from [androidx.appcompat:appcompat-resources:1.7.0] C:\Gradle\.gradle\caches\8.10.2\transforms\e5ad576e368c8b78c5700c8643cbcbe8\transformed\appcompat-resources-1.7.0\AndroidManifest.xml:2:1-7:12
@@ -66,15 +66,9 @@ uses-permission#android.permission.BLUETOOTH_CONNECT
 ADDED from D:\ToricSentry\app\src\main\AndroidManifest.xml:7:5-76
 	android:name
 		ADDED from D:\ToricSentry\app\src\main\AndroidManifest.xml:7:22-73
-uses-permission#android.permission.ACCESS_FINE_LOCATION
-ADDED from D:\ToricSentry\app\src\main\AndroidManifest.xml:8:5-10:38
-	android:maxSdkVersion
-		ADDED from D:\ToricSentry\app\src\main\AndroidManifest.xml:10:9-35
-	android:name
-		ADDED from D:\ToricSentry\app\src\main\AndroidManifest.xml:9:9-63
 application
-ADDED from D:\ToricSentry\app\src\main\AndroidManifest.xml:12:5-27:19
-INJECTED from D:\ToricSentry\app\src\main\AndroidManifest.xml:12:5-27:19
+ADDED from D:\ToricSentry\app\src\main\AndroidManifest.xml:9:5-24:19
+INJECTED from D:\ToricSentry\app\src\main\AndroidManifest.xml:9:5-24:19
 MERGED from [com.google.android.material:material:1.12.0] C:\Gradle\.gradle\caches\8.10.2\transforms\b3ce203889be37e725c4cc61b2df2736\transformed\material-1.12.0\AndroidManifest.xml:22:5-20
 MERGED from [com.google.android.material:material:1.12.0] C:\Gradle\.gradle\caches\8.10.2\transforms\b3ce203889be37e725c4cc61b2df2736\transformed\material-1.12.0\AndroidManifest.xml:22:5-20
 MERGED from [androidx.constraintlayout:constraintlayout:2.1.4] C:\Gradle\.gradle\caches\8.10.2\transforms\3acf2ec4c13d6f0af61c3fbcf11db669\transformed\constraintlayout-2.1.4\AndroidManifest.xml:9:5-20
@@ -96,33 +90,33 @@ MERGED from [androidx.startup:startup-runtime:1.1.1] C:\Gradle\.gradle\caches\8.
 	android:appComponentFactory
 		ADDED from [androidx.core:core:1.13.1] C:\Gradle\.gradle\caches\8.10.2\transforms\66572a01964279bcc7b083198e42efc1\transformed\core-1.13.1\AndroidManifest.xml:28:18-86
 	android:supportsRtl
-		ADDED from D:\ToricSentry\app\src\main\AndroidManifest.xml:17:9-35
+		ADDED from D:\ToricSentry\app\src\main\AndroidManifest.xml:14:9-35
 	android:label
-		ADDED from D:\ToricSentry\app\src\main\AndroidManifest.xml:15:9-41
+		ADDED from D:\ToricSentry\app\src\main\AndroidManifest.xml:12:9-41
 	android:roundIcon
-		ADDED from D:\ToricSentry\app\src\main\AndroidManifest.xml:16:9-63
+		ADDED from D:\ToricSentry\app\src\main\AndroidManifest.xml:13:9-63
 	android:icon
-		ADDED from D:\ToricSentry\app\src\main\AndroidManifest.xml:14:9-58
+		ADDED from D:\ToricSentry\app\src\main\AndroidManifest.xml:11:9-58
 	android:allowBackup
-		ADDED from D:\ToricSentry\app\src\main\AndroidManifest.xml:13:9-35
+		ADDED from D:\ToricSentry\app\src\main\AndroidManifest.xml:10:9-35
 	android:theme
-		ADDED from D:\ToricSentry\app\src\main\AndroidManifest.xml:18:9-49
+		ADDED from D:\ToricSentry\app\src\main\AndroidManifest.xml:15:9-49
 activity#com.yoshyhyrro.toricsentry.MainActivity
-ADDED from D:\ToricSentry\app\src\main\AndroidManifest.xml:19:9-26:20
+ADDED from D:\ToricSentry\app\src\main\AndroidManifest.xml:16:9-23:20
 	android:exported
-		ADDED from D:\ToricSentry\app\src\main\AndroidManifest.xml:21:13-36
+		ADDED from D:\ToricSentry\app\src\main\AndroidManifest.xml:18:13-36
 	android:name
-		ADDED from D:\ToricSentry\app\src\main\AndroidManifest.xml:20:13-41
+		ADDED from D:\ToricSentry\app\src\main\AndroidManifest.xml:17:13-41
 intent-filter#action:name:android.intent.action.MAIN+category:name:android.intent.category.LAUNCHER
-ADDED from D:\ToricSentry\app\src\main\AndroidManifest.xml:22:13-25:29
+ADDED from D:\ToricSentry\app\src\main\AndroidManifest.xml:19:13-22:29
 action#android.intent.action.MAIN
-ADDED from D:\ToricSentry\app\src\main\AndroidManifest.xml:23:17-69
+ADDED from D:\ToricSentry\app\src\main\AndroidManifest.xml:20:17-69
 	android:name
-		ADDED from D:\ToricSentry\app\src\main\AndroidManifest.xml:23:25-66
+		ADDED from D:\ToricSentry\app\src\main\AndroidManifest.xml:20:25-66
 category#android.intent.category.LAUNCHER
-ADDED from D:\ToricSentry\app\src\main\AndroidManifest.xml:24:17-77
+ADDED from D:\ToricSentry\app\src\main\AndroidManifest.xml:21:17-77
 	android:name
-		ADDED from D:\ToricSentry\app\src\main\AndroidManifest.xml:24:27-74
+		ADDED from D:\ToricSentry\app\src\main\AndroidManifest.xml:21:27-74
 uses-sdk
 INJECTED from D:\ToricSentry\app\src\main\AndroidManifest.xml reason: use-sdk injection requested
 INJECTED from D:\ToricSentry\app\src\main\AndroidManifest.xml

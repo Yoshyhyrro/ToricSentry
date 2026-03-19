@@ -32,12 +32,12 @@
             priority="0"/>
         <location
             file="${:app*projectDir}/build.gradle.kts"
-            line="41"
+            line="45"
             column="20"
-            startOffset="877"
-            endLine="41"
+            startOffset="935"
+            endLine="45"
             endColumn="51"
-            endOffset="908"/>
+            endOffset="966"/>
     </incident>
 
     <incident
@@ -52,12 +52,12 @@
             priority="0"/>
         <location
             file="${:app*projectDir}/build.gradle.kts"
-            line="42"
+            line="46"
             column="20"
-            startOffset="929"
-            endLine="42"
+            startOffset="987"
+            endLine="46"
             endColumn="56"
-            endOffset="965"/>
+            endOffset="1023"/>
     </incident>
 
     <incident
@@ -72,12 +72,12 @@
             priority="0"/>
         <location
             file="${:app*projectDir}/build.gradle.kts"
-            line="43"
+            line="47"
             column="20"
-            startOffset="986"
-            endLine="43"
+            startOffset="1044"
+            endLine="47"
             endColumn="65"
-            endOffset="1031"/>
+            endOffset="1089"/>
     </incident>
 
     <incident
@@ -92,12 +92,12 @@
             priority="0"/>
         <location
             file="${:app*projectDir}/build.gradle.kts"
-            line="44"
+            line="48"
             column="20"
-            startOffset="1052"
-            endLine="44"
+            startOffset="1110"
+            endLine="48"
             endColumn="70"
-            endOffset="1102"/>
+            endOffset="1160"/>
     </incident>
 
     <incident
@@ -112,12 +112,12 @@
             priority="0"/>
         <location
             file="${:app*projectDir}/build.gradle.kts"
-            line="45"
+            line="49"
             column="20"
-            startOffset="1123"
-            endLine="45"
+            startOffset="1181"
+            endLine="49"
             endColumn="68"
-            endOffset="1171"/>
+            endOffset="1229"/>
     </incident>
 
     <incident
@@ -132,12 +132,12 @@
             priority="0"/>
         <location
             file="${:app*projectDir}/build.gradle.kts"
-            line="50"
+            line="54"
             column="31"
-            startOffset="1327"
-            endLine="50"
+            startOffset="1385"
+            endLine="54"
             endColumn="62"
-            endOffset="1358"/>
+            endOffset="1416"/>
     </incident>
 
     <incident
@@ -152,12 +152,12 @@
             priority="0"/>
         <location
             file="${:app*projectDir}/build.gradle.kts"
-            line="51"
+            line="55"
             column="31"
-            startOffset="1390"
-            endLine="51"
+            startOffset="1448"
+            endLine="55"
             endColumn="75"
-            endOffset="1434"/>
+            endOffset="1492"/>
     </incident>
 
     <incident
