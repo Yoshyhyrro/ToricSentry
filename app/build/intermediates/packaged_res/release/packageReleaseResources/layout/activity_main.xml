@@ -11,6 +11,13 @@
         android:layout_height="wrap_content"
         android:text="Run Detector Demo" />
 
+    <Button
+        android:id="@+id/runQDeformedDemoButton"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:text="Run Q-Deformed Demo" />
+
     <ScrollView
         android:layout_width="match_parent"
         android:layout_height="0dp"

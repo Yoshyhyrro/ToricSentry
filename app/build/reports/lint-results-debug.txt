@@ -83,12 +83,9 @@ D:\ToricSentry\app\src\main\res\values\themes.xml:4: Warning: Unnecessary; SDK_I
    where the version qualifier is less than or equal to the minSdkVersion,
    where the contents should be merged into the best folder.
 
-D:\ToricSentry\app\src\main\java\com\yoshyhyrro\toricsentry\MainActivity.kt:23: Warning: Do not concatenate text displayed with setText. Use resource string with placeholders. [SetTextI18n]
-            logText.text = "Running detector demo...\n"
-                           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-D:\ToricSentry\app\src\main\java\com\yoshyhyrro\toricsentry\MainActivity.kt:23: Warning: String literal in setText can not be translated. Use Android resources instead. [SetTextI18n]
-            logText.text = "Running detector demo...\n"
-                            ~~~~~~~~~~~~~~~~~~~~~~~~
+D:\ToricSentry\app\src\main\java\com\yoshyhyrro\toricsentry\MainActivity.kt:55: Warning: Do not concatenate text displayed with setText. Use resource string with placeholders. [SetTextI18n]
+        logText.text = "$startMessage\n"
+                       ~~~~~~~~~~~~~~~~~
 
    Explanation for issues of type "SetTextI18n":
    When calling TextView#setText
@@ -106,7 +103,10 @@ D:\ToricSentry\app\src\main\java\com\yoshyhyrro\toricsentry\MainActivity.kt:23: 
 D:\ToricSentry\app\src\main\res\layout\activity_main.xml:12: Warning: Hardcoded string "Run Detector Demo", should use @string resource [HardcodedText]
         android:text="Run Detector Demo" />
         ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-D:\ToricSentry\app\src\main\res\layout\activity_main.xml:26: Warning: Hardcoded string "Ready", should use @string resource [HardcodedText]
+D:\ToricSentry\app\src\main\res\layout\activity_main.xml:19: Warning: Hardcoded string "Run Q-Deformed Demo", should use @string resource [HardcodedText]
+        android:text="Run Q-Deformed Demo" />
+        ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+D:\ToricSentry\app\src\main\res\layout\activity_main.xml:33: Warning: Hardcoded string "Ready", should use @string resource [HardcodedText]
             android:text="Ready" />
             ~~~~~~~~~~~~~~~~~~~~
 

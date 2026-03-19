@@ -166,26 +166,12 @@
         message="Do not concatenate text displayed with `setText`. Use resource string with placeholders.">
         <location
             file="${:app*debug*MAIN*sourceProvider*0*javaDir*0}/com/yoshyhyrro/toricsentry/MainActivity.kt"
-            line="23"
-            column="28"
-            startOffset="797"
-            endLine="23"
-            endColumn="56"
-            endOffset="825"/>
-    </incident>
-
-    <incident
-        id="SetTextI18n"
-        severity="warning"
-        message="String literal in `setText` can not be translated. Use Android resources instead.">
-        <location
-            file="${:app*debug*MAIN*sourceProvider*0*javaDir*0}/com/yoshyhyrro/toricsentry/MainActivity.kt"
-            line="23"
-            column="29"
-            startOffset="798"
-            endLine="23"
-            endColumn="53"
-            endOffset="822"/>
+            line="55"
+            column="24"
+            startOffset="1901"
+            endLine="55"
+            endColumn="41"
+            endOffset="1918"/>
     </incident>
 
     <incident
@@ -205,15 +191,29 @@
     <incident
         id="HardcodedText"
         severity="warning"
+        message="Hardcoded string &quot;Run Q-Deformed Demo&quot;, should use `@string` resource">
+        <location
+            file="${:app*debug*MAIN*sourceProvider*0*resDir*0}/layout/activity_main.xml"
+            line="19"
+            column="9"
+            startOffset="658"
+            endLine="19"
+            endColumn="43"
+            endOffset="692"/>
+    </incident>
+
+    <incident
+        id="HardcodedText"
+        severity="warning"
         message="Hardcoded string &quot;Ready&quot;, should use `@string` resource">
         <location
             file="${:app*debug*MAIN*sourceProvider*0*resDir*0}/layout/activity_main.xml"
-            line="26"
+            line="33"
             column="13"
-            startOffset="913"
-            endLine="26"
+            startOffset="1156"
+            endLine="33"
             endColumn="33"
-            endOffset="933"/>
+            endOffset="1176"/>
     </incident>
 
 </incidents>

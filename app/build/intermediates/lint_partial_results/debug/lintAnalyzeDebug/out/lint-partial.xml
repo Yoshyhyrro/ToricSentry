@@ -10,7 +10,7 @@
     <map id="UnusedResources">
         <entry
             name="model"
-            string="attr[textAppearanceBodySmall(R)],id[runDemoButton(U),logText(U)],layout[activity_main(U)],string[app_name(U)],style[Theme_ToricSentry(U),Theme_Material3_DayNight_NoActionBar(R)];3^0,5^6;;;"/>
+            string="attr[textAppearanceBodySmall(R)],id[runDemoButton(U),runQDeformedDemoButton(U),logText(U)],layout[activity_main(U)],string[app_name(U)],style[Theme_ToricSentry(U),Theme_Material3_DayNight_NoActionBar(R)];4^0,6^7;;;"/>
     </map>
 
 </incidents>

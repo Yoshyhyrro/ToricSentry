@@ -6,6 +6,7 @@ import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
 import com.yoshyhyrro.toricsentry.core.runDetectorDemo
+import com.yoshyhyrro.toricsentry.core.runQDeformedDetectorDemo
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -16,20 +17,51 @@ class MainActivity : AppCompatActivity() {
         setContentView(R.layout.activity_main)
 
         val runButton = findViewById<Button>(R.id.runDemoButton)
+        val runQDeformedButton = findViewById<Button>(R.id.runQDeformedDemoButton)
         val logText = findViewById<TextView>(R.id.logText)
 
         runButton.setOnClickListener {
-            runButton.isEnabled = false
-            logText.text = "Running detector demo...\n"
-
-            lifecycleScope.launch(Dispatchers.Default) {
-                val logs = mutableListOf<String>()
+            runDemo(
+                primaryButton = runButton,
+                secondaryButton = runQDeformedButton,
+                logText = logText,
+                startMessage = "Running detector demo..."
+            ) { logs ->
                 runDetectorDemo { line -> logs.add(line) }
+            }
+        }
 
-                withContext(Dispatchers.Main) {
-                    logText.text = logs.joinToString(separator = "\n")
-                    runButton.isEnabled = true
-                }
+        runQDeformedButton.setOnClickListener {
+            runDemo(
+                primaryButton = runQDeformedButton,
+                secondaryButton = runButton,
+                logText = logText,
+                startMessage = "Running Q-Deformed detector demo..."
+            ) { logs ->
+                runQDeformedDetectorDemo { line -> logs.add(line) }
+            }
+        }
+    }
+
+    private fun runDemo(
+        primaryButton: Button,
+        secondaryButton: Button,
+        logText: TextView,
+        startMessage: String,
+        block: suspend (MutableList<String>) -> Unit
+    ) {
+        primaryButton.isEnabled = false
+        secondaryButton.isEnabled = false
+        logText.text = "$startMessage\n"
+
+        lifecycleScope.launch(Dispatchers.Default) {
+            val logs = mutableListOf<String>()
+            block(logs)
+
+            withContext(Dispatchers.Main) {
+                logText.text = logs.joinToString(separator = "\n")
+                primaryButton.isEnabled = true
+                secondaryButton.isEnabled = true
             }
         }
     }

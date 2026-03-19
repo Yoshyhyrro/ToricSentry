@@ -173,30 +173,12 @@
         explanation="When calling `TextView#setText`&#xA;* Never call `Number#toString()` to format numbers; it will not handle fraction separators and locale-specific digits properly. Consider using `String#format` with proper format specifications (`%d` or `%f`) instead.&#xA;* Do not pass a string literal (e.g. &quot;Hello&quot;) to display text. Hardcoded text can not be properly translated to other languages. Consider using Android resource strings instead.&#xA;* Do not build messages by concatenating text chunks. Such messages can not be properly translated."
         url="https://developer.android.com/guide/topics/resources/localization.html"
         urls="https://developer.android.com/guide/topics/resources/localization.html"
-        errorLine1="            logText.text = &quot;Running detector demo...\n&quot;"
-        errorLine2="                           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        errorLine1="        logText.text = &quot;$startMessage\n&quot;"
+        errorLine2="                       ~~~~~~~~~~~~~~~~~">
         <location
             file="D:\ToricSentry\app\src\main\java\com\yoshyhyrro\toricsentry\MainActivity.kt"
-            line="23"
-            column="28"/>
-    </issue>
-
-    <issue
-        id="SetTextI18n"
-        severity="Warning"
-        message="String literal in `setText` can not be translated. Use Android resources instead."
-        category="Internationalization"
-        priority="6"
-        summary="TextView Internationalization"
-        explanation="When calling `TextView#setText`&#xA;* Never call `Number#toString()` to format numbers; it will not handle fraction separators and locale-specific digits properly. Consider using `String#format` with proper format specifications (`%d` or `%f`) instead.&#xA;* Do not pass a string literal (e.g. &quot;Hello&quot;) to display text. Hardcoded text can not be properly translated to other languages. Consider using Android resource strings instead.&#xA;* Do not build messages by concatenating text chunks. Such messages can not be properly translated."
-        url="https://developer.android.com/guide/topics/resources/localization.html"
-        urls="https://developer.android.com/guide/topics/resources/localization.html"
-        errorLine1="            logText.text = &quot;Running detector demo...\n&quot;"
-        errorLine2="                            ~~~~~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="D:\ToricSentry\app\src\main\java\com\yoshyhyrro\toricsentry\MainActivity.kt"
-            line="23"
-            column="29"/>
+            line="55"
+            column="24"/>
     </issue>
 
     <issue
@@ -218,6 +200,22 @@
     <issue
         id="HardcodedText"
         severity="Warning"
+        message="Hardcoded string &quot;Run Q-Deformed Demo&quot;, should use `@string` resource"
+        category="Internationalization"
+        priority="5"
+        summary="Hardcoded text"
+        explanation="Hardcoding text attributes directly in layout files is bad for several reasons:&#xA;&#xA;* When creating configuration variations (for example for landscape or portrait) you have to repeat the actual text (and keep it up to date when making changes)&#xA;&#xA;* The application cannot be translated to other languages by just adding new translations for existing string resources.&#xA;&#xA;There are quickfixes to automatically extract this hardcoded string into a resource lookup."
+        errorLine1="        android:text=&quot;Run Q-Deformed Demo&quot; />"
+        errorLine2="        ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="D:\ToricSentry\app\src\main\res\layout\activity_main.xml"
+            line="19"
+            column="9"/>
+    </issue>
+
+    <issue
+        id="HardcodedText"
+        severity="Warning"
         message="Hardcoded string &quot;Ready&quot;, should use `@string` resource"
         category="Internationalization"
         priority="5"
@@ -227,7 +225,7 @@
         errorLine2="            ~~~~~~~~~~~~~~~~~~~~">
         <location
             file="D:\ToricSentry\app\src\main\res\layout\activity_main.xml"
-            line="26"
+            line="33"
             column="13"/>
     </issue>
 

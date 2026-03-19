@@ -31,6 +31,7 @@ com.yoshyhyrro.toricsentry.app-pngs-29 D:\ToricSentry\app\build\generated\res\pn
 com.yoshyhyrro.toricsentry.app-resValues-30 D:\ToricSentry\app\build\generated\res\resValues\release
 com.yoshyhyrro.toricsentry.app-packageReleaseResources-31 D:\ToricSentry\app\build\intermediates\incremental\release\packageReleaseResources\merged.dir
 com.yoshyhyrro.toricsentry.app-packageReleaseResources-32 D:\ToricSentry\app\build\intermediates\incremental\release\packageReleaseResources\stripped.dir
-com.yoshyhyrro.toricsentry.app-release-33 D:\ToricSentry\app\build\intermediates\merged_res\release\mergeReleaseResources
-com.yoshyhyrro.toricsentry.app-main-34 D:\ToricSentry\app\src\main\res
-com.yoshyhyrro.toricsentry.app-release-35 D:\ToricSentry\app\src\release\res
+com.yoshyhyrro.toricsentry.app-merged-not-compiled-resources-33 D:\ToricSentry\app\build\intermediates\merged-not-compiled-resources\release
+com.yoshyhyrro.toricsentry.app-release-34 D:\ToricSentry\app\build\intermediates\merged_res\release\mergeReleaseResources
+com.yoshyhyrro.toricsentry.app-main-35 D:\ToricSentry\app\src\main\res
+com.yoshyhyrro.toricsentry.app-release-36 D:\ToricSentry\app\src\release\res
