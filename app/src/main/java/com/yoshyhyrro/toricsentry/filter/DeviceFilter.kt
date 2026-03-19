@@ -29,11 +29,15 @@ class DeviceFilter(
          * 実運用に応じて差し替え・追加すること。
          */
         val DEFAULT_TRUSTED_VENDOR_IDS: Set<Int> = setOf(
+            0x0006, // Microsoft Corporation
             0x0075, // Apple Inc.
+            0x004C, // Apple Inc. (iBeacon / iPhone アドバタイズ)
             0x00E0, // Google LLC
+            0x012D, // Sony Corporation (PS4/PS5 コントローラー等)
             0x02E5, // Anthem Inc. (Ingenico 系)
             0x0499, // Ruuvi Innovations (一般センサー)
             0x059E, // Square, Inc.
+            0x1903, // Bose Corporation
         )
     }
 

@@ -18,6 +18,14 @@
         android:layout_marginTop="8dp"
         android:text="Run Q-Deformed Demo" />
 
+    <Button
+        android:id="@+id/scanRealBleButton"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="16dp"
+        android:text="▶ BLE スキャン開始"
+        android:backgroundTint="@android:color/holo_green_dark" />
+
     <ScrollView
         android:layout_width="match_parent"
         android:layout_height="0dp"
