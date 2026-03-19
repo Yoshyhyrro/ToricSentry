@@ -1,5 +1,7 @@
 package com.yoshyhyrro.toricsentry.core
 
+import com.yoshyhyrro.toricsentry.filter.DeviceFilter
+import com.yoshyhyrro.toricsentry.sensor.BleScanner
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -400,40 +402,50 @@ suspend fun runDetectorDemo(log: (String) -> Unit) {
     }
     log("16 sensors registered")
 
-    val bleManager = BleDeviceManager(
-        onReadingReceived = { reading -> detector.updateSensorReading(reading) },
+    // --- フィルター設定 ---
+    // 手元にある正規のカードリーダー等の MAC をここに登録すると検知対象から除外される
+    val filter = DeviceFilter()
+    // 例: filter.addTrustedMac("11:22:33:44:55:66")
+
+    val scanner = BleScanner(
+        onReadingReceived = { reading ->
+            detector.updateSensorReading(reading)
+        },
         scope = scope,
         logger = log
     )
 
-    bleManager.startScan()
+    scanner.startScan()
     for (i in 0 until 16) {
         val mac = "AA:BB:CC:DD:EE:%02X".format(i)
-        bleManager.onDeviceFound(mac, "SkimSensor_$i", rssi = -45 - i)
-        bleManager.onConnected(mac)
-        bleManager.onSubscribed(mac)
+        // フィルターを通過した場合のみスキャナーに渡す
+        if (!filter.shouldIgnore(mac)) {
+            scanner.onDeviceFound(mac, "SkimSensor_$i", rssi = -45 - i)
+            scanner.onConnected(mac)
+            scanner.onSubscribed(mac)
+        } else {
+            log("[$mac] Ignored by DeviceFilter")
+        }
     }
 
     delay(100)
 
     log("Test 1: parity matched")
     for (i in 0 until 16) {
-        bleManager.simulateReading(
-            macAddress = "AA:BB:CC:DD:EE:%02X".format(i),
-            value = 1,
-            battery = 90,
-            rssi = -50
-        )
+        val mac = "AA:BB:CC:DD:EE:%02X".format(i)
+        if (!filter.shouldIgnore(mac)) {
+            scanner.simulateReading(macAddress = mac, value = 1, battery = 90, rssi = -50)
+        }
     }
 
     delay(300)
     log("Stats: ${detector.getStatistics()}")
 
     log("Test 2: tampered values")
-    bleManager.simulateReading("AA:BB:CC:DD:EE:00", value = 0, battery = 85, rssi = -75)
+    scanner.simulateReading("AA:BB:CC:DD:EE:00", value = 0, battery = 85, rssi = -75)
     delay(100)
     listOf("AA:BB:CC:DD:EE:02", "AA:BB:CC:DD:EE:04", "AA:BB:CC:DD:EE:06").forEach { mac ->
-        bleManager.simulateReading(mac, value = 0, battery = 80, rssi = -78)
+        scanner.simulateReading(mac, value = 0, battery = 80, rssi = -78)
         delay(50)
     }
 
@@ -441,12 +453,12 @@ suspend fun runDetectorDemo(log: (String) -> Unit) {
     log("Stats: ${detector.getStatistics()}")
 
     log("Test 3: weak RSSI ignored")
-    bleManager.onDeviceFound("FF:FF:FF:FF:FF:FF", "WeakDevice", rssi = -95)
+    scanner.onDeviceFound("FF:FF:FF:FF:FF:FF", "WeakDevice", rssi = -95)
 
     log("Test 4: disconnect simulation")
-    bleManager.onDisconnected("AA:BB:CC:DD:EE:00")
+    scanner.onDisconnected("AA:BB:CC:DD:EE:00")
 
-    bleManager.getAllDevices().sortedBy { it.sensorId }.forEach { d ->
+    scanner.getAllDevices().sortedBy { it.sensorId }.forEach { d ->
         log("${d.sensorId} ${d.macAddress} RSSI=${d.lastRssi} ${d.connectionState}")
     }
 
