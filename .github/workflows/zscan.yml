@@ -45,7 +45,7 @@ jobs:
       run: echo "APK_PATH=app/build/outputs/apk/release/app-release-unsigned.apk" >> $GITHUB_ENV
 
     - name: Run Zimperium zScan
-      if: ${{ secrets.ZSCAN_CLIENT_ENV != '' && secrets.ZSCAN_CLIENT_ID != '' && secrets.ZSCAN_CLIENT_SECRET != '' }}
+      if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
       uses: zimperium/zscanmarketplace@bfc6670f6648d796098c251ccefcfdb98983174d
       timeout-minutes: 60
       with:
