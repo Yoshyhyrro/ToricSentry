@@ -38,21 +38,25 @@ jobs:
     - name: Checkout repository
       uses: actions/checkout@v4
 
-    - name: Execute gradle build
-      run: ./gradlew build    # Change this to build your mobile application
+    - name: Assemble Android release APK
+      run: ./gradlew :app:assembleRelease
+
+    - name: Set APK path
+      run: echo "APK_PATH=app/build/outputs/apk/release/app-release-unsigned.apk" >> $GITHUB_ENV
 
     - name: Run Zimperium zScan
+      if: ${{ secrets.ZSCAN_CLIENT_ENV != '' && secrets.ZSCAN_CLIENT_ID != '' && secrets.ZSCAN_CLIENT_SECRET != '' }}
       uses: zimperium/zscanmarketplace@bfc6670f6648d796098c251ccefcfdb98983174d
       timeout-minutes: 60
       with:
-        # REPLACE: Zimperium Client Environment Name
-        client_env: env_string
-        # REPLACE: Zimperium Client ID
-        client_id: id_string
-        # REPLACE: Zimperium Client Secret
+        # Zimperium Client Environment Name (from repo secrets)
+        client_env: ${{ secrets.ZSCAN_CLIENT_ENV }}
+        # Zimperium Client ID (from repo secrets)
+        client_id: ${{ secrets.ZSCAN_CLIENT_ID }}
+        # Zimperium Client Secret (from repo secrets)
         client_secret: ${{ secrets.ZSCAN_CLIENT_SECRET }}
-        # REPLACE: The path to an .ipa or .apk
-        app_file: app-release-unsigned.apk
+        # Path to the generated .apk
+        app_file: ${{ env.APK_PATH }}
 
     - name: Upload SARIF file
       uses: github/codeql-action/upload-sarif@v3
