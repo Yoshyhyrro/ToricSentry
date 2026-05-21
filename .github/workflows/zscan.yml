@@ -19,9 +19,9 @@ name: "Zimperium zScan"
 
 on:
   push:
-    branches: [ "main" ]
+    branches: [ "feature/normal_card_reader" ]
   pull_request:
-    branches: [ "main" ]
+    branches: [ "feature/normal_card_reader" ]
 
 permissions:
   contents: read
